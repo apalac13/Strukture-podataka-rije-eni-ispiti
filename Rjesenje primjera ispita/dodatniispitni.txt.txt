@@ -1,0 +1,306 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_NAME (1024)
+#define MAX_FILE_NAME (1024)
+#define MAX_PHONE (16)
+#define MAX_PHONE_PREFIX (8)
+
+struct _person;
+typedef struct _person *PersonPosition;
+typedef struct _person {
+    char firstName[MAX_NAME];
+    char middleName[MAX_NAME];
+    char lastName[MAX_NAME];
+    char phone[MAX_PHONE];
+    PersonPosition next;
+} Person;
+
+struct _county;
+typedef struct _county *CountyPosition;
+typedef struct _county {
+    char name[MAX_NAME];
+    char phonePrefix[MAX_PHONE_PREFIX];
+    Person people;
+    CountyPosition next;
+} County;
+
+CountyPosition createCounty(char *name, char *phonePrefix);
+void insertCounty(CountyPosition head, CountyPosition county);
+void deleteCounties(CountyPosition head);
+CountyPosition findByName(CountyPosition head, char *name);
+int peopleCompare(PersonPosition p1, PersonPosition p2);
+void deletePeople(PersonPosition head);
+PersonPosition createPerson(char *firstName, char *middleName, char *lastName, char *phone);
+void insertPerson(PersonPosition head, PersonPosition person);
+int readCounties(CountyPosition head, char *fileName);
+int readPeopleIntoCounties(CountyPosition head, char *fileName);
+int printPeopleWithCountiesIntoFile(CountyPosition head, char *fileName);
+int printPeopleWithGroupByCountiesIntoFile(CountyPosition head, char *fileName);
+
+int main(void) {
+    char fileName[MAX_FILE_NAME] = {0};
+    County counties;
+    int result = EXIT_SUCCESS;
+
+    counties.next = NULL;
+
+    printf("Insert county file to read: ");
+    scanf(" %s", fileName);
+
+    result = readCounties(&counties, fileName);
+
+    if (result == EXIT_FAILURE) {
+        return EXIT_FAILURE;
+    }
+
+    printf("Insert people file to read: ");
+    scanf(" %s", fileName);
+
+    result = readPeopleIntoCounties(&counties, fileName);
+
+    if (result == EXIT_FAILURE) {
+        deleteCounties(&counties);
+        return EXIT_FAILURE;
+    }
+
+    printf("Insert people file to write by group: ");
+    scanf(" %s", fileName);
+
+    result = printPeopleWithGroupByCountiesIntoFile(&counties, fileName);
+
+    if (result == EXIT_FAILURE) {
+        deleteCounties(&counties);
+        return EXIT_FAILURE;
+    }
+
+    printf("Insert people file to write : ");
+    scanf(" %s", fileName);
+
+    result = printPeopleWithCountiesIntoFile(&counties, fileName);
+    deleteCounties(&counties);
+
+    return result;
+}
+
+CountyPosition createCounty(char *name, char *phonePrefix) {
+    CountyPosition county = (CountyPosition)malloc(sizeof(County));
+
+    if (!county) {
+        printf("Error allocating county %s %s\n", name, phonePrefix);
+        return NULL;
+    }
+
+    strcpy(county->name, name);
+    strcpy(county->phonePrefix, phonePrefix);
+    county->people.next = NULL;
+    county->next = NULL;
+
+    return county;
+}
+
+void insertCounty(CountyPosition head, CountyPosition county) {
+    CountyPosition p = NULL;
+
+    for (p = head; 
+         p->next != NULL && strcmp(p->name, county->name) < 0; 
+         p = p->next);
+
+    county->next = p->next;
+    p->next = county;
+}
+
+void deleteCounties(CountyPosition head) {
+    CountyPosition toDelete = NULL;
+    while (head->next) {
+        toDelete = head->next;
+        head->next = toDelete->next;
+        deletePeople(&toDelete->people);
+        free(toDelete);
+    }
+}
+
+CountyPosition findByName(CountyPosition head, char *name) {
+    CountyPosition p = NULL;
+
+    for (p = head->next; 
+         p != NULL && strcmp(p->name, name) != 0; 
+         p = p->next);
+
+    return p;
+}
+
+int peopleCompare(PersonPosition p1, PersonPosition p2) {
+    int cmp = strcmp(p1->lastName, p2->lastName);
+
+    if (cmp != 0) {
+        return cmp;
+    }
+
+    return strcmp(p1->firstName, p2->firstName);
+}
+
+void deletePeople(PersonPosition head) {
+    PersonPosition toDelete = NULL;
+    while (head->next) {
+        toDelete = head->next;
+        head->next = toDelete->next;
+        free(toDelete);
+    }
+}
+
+PersonPosition createPerson(char *firstName, char *middleName, char *lastName, char *phone) {
+    PersonPosition person = (PersonPosition)malloc(sizeof(Person));
+
+    if (!person) {
+        printf("Error allocating person %s %s\n", firstName, lastName);
+        return NULL;
+    }
+
+    strcpy(person->firstName, firstName);
+    strcpy(person->middleName, middleName);
+    strcpy(person->lastName, lastName);
+    strcpy(person->phone, phone);
+    person->next = NULL;
+
+    return person;
+}
+
+void insertPerson(PersonPosition head, PersonPosition person) {
+    PersonPosition p = NULL;
+
+    for (p = head; 
+         p->next != NULL && peopleCompare(p, person) < 0; 
+         p = p->next);
+
+    person->next = p->next;
+    p->next = person;
+}
+
+int readCounties(CountyPosition head, char *fileName) {
+    FILE *fp = NULL;
+    char name[MAX_NAME] = {0};
+    char phonePrefix[MAX_PHONE_PREFIX] = {0};
+    CountyPosition county = NULL;
+    
+    fp = fopen(fileName, "r");
+
+    if (!fp) {
+        printf("File %s failed to open!", fileName);
+        return EXIT_FAILURE;
+    }
+
+    while (!feof(fp)) {
+        fscanf(fp, " %s %s", name, phonePrefix);
+        county = createCounty(name, phonePrefix);
+
+        if (!county) {
+            deleteCounties(head);
+            return EXIT_FAILURE;
+        }
+        
+        insertCounty(head, county);
+    }
+    
+    fclose(fp);
+
+    return EXIT_SUCCESS;
+}
+
+int readPeopleIntoCounties(CountyPosition head, char *fileName) {
+    FILE *fp = NULL;
+    char firstName[MAX_NAME] = {0};
+    char middleName[MAX_NAME] = {0};
+    char lastName[MAX_NAME] = {0};
+    char countyName[MAX_NAME] = {0};
+    char phone[MAX_PHONE] = {0};
+    PersonPosition person = NULL;
+    CountyPosition county = NULL;
+    
+    fp = fopen(fileName, "r");
+
+    if (!fp) {
+        printf("File %s failed to open!", fileName);
+        return EXIT_FAILURE;
+    }
+
+    while (!feof(fp)) {
+        int test = 0;
+        fscanf(fp, " %s", firstName);
+        fscanf(fp, " %s", middleName);
+        fscanf(fp, " %s", lastName);
+
+        if (sscanf(lastName, " %d", &test) == 1) {
+            strcpy(phone, lastName);
+            strcpy(lastName, middleName);
+            strcpy(middleName, "");
+            fscanf(fp, " %s", countyName);
+        } else {
+            fscanf(fp, " %s", phone);
+            fscanf(fp, " %s", countyName);
+        }
+
+        county = findByName(head, countyName);
+
+        if (!county) {
+            deleteCounties(head);
+            return EXIT_FAILURE;
+        }
+
+        person = createPerson(firstName, middleName, lastName, phone);
+
+        if (!person) {
+            deleteCounties(head);
+            return EXIT_FAILURE;
+        }
+        
+        insertPerson(&county->people, person);
+    }
+    
+    fclose(fp);
+
+    return EXIT_SUCCESS;
+}
+
+int printPeopleWithCountiesIntoFile(CountyPosition head, char *fileName) {
+    FILE *fp = NULL;
+
+    fp = fopen(fileName, "wb+");
+
+    if (!fp) {
+        printf("Failed to open file for writing people %s", fileName);
+        return EXIT_FAILURE;
+    }
+
+    for (CountyPosition county = head->next; county != NULL; county = county->next) {
+        for (PersonPosition person = county->people.next; person != NULL; person = person->next) {
+            fprintf(fp, "%s %s %s %s %s/%s\n", person->firstName, person->middleName, person->lastName, county->name, county->phonePrefix, person->phone);
+        }
+    }
+
+    fclose(fp);
+    return EXIT_SUCCESS;
+}
+
+int printPeopleWithGroupByCountiesIntoFile(CountyPosition head, char *fileName) {
+    FILE *fp = NULL;
+
+    fp = fopen(fileName, "wb+");
+
+    if (!fp) {
+        printf("Failed to open file for writing people %s", fileName);
+        return EXIT_FAILURE;
+    }
+
+    for (CountyPosition county = head->next; county != NULL; county = county->next) {
+        fprintf(fp, "\n********** County %s (%s) *****************\n", county->name, county->phonePrefix);
+        for (PersonPosition person = county->people.next; person != NULL; person = person->next) {
+            fprintf(fp, "%s %s %s 0%s/%s\n", person->firstName, person->middleName, person->lastName, county->phonePrefix, person->phone);
+        }
+        fprintf(fp, "**************************************************************************\n\n");
+    }
+
+    fclose(fp);
+    return EXIT_SUCCESS;
+}
